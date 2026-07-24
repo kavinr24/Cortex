@@ -2,6 +2,7 @@ import yfinance as yf
 import datetime as dt
 import matplotlib as mpl
 import pandas as pd
+import sqlite3
 
 
 tickers = ['AAPL', 'MSFT','GOOGL','NVDA','SPY','AMZN']
@@ -64,6 +65,45 @@ with open(csv_file, 'w') as f:
 verify_df = pd.read_json(json_file)
 print("Records per ticker:")
 print(verify_df.groupby('ticker').size())
+
+print("creating sqlite database")
+with sqlite3.connect(db) as conn:
+    cursor = conn.cursor()
+    cursor.execute(
+        """
+        CREATE TABLE IF NOT EXISTS ohlcv (
+            ticker TEXT,
+            timestamp TEXT,
+            open REAL,
+            high REAL,
+            low REAL,
+            close REAL,
+            volume INTEGER,
+            PRIMARY KEY (ticker, timestamp)
+        )
+        
+    """
+    )
+    conn.commit()
+
+    flat_table_data.to_sql("ohlcv",conn,if_exists="replace",index=False)
+    print("inserted records into db")
+
+
+    # verification
+    with sqlite3.connect(db) as conn:
+        summary_query = pd.read_sql_query("SELECT ticker, COUNT(*) as row_count, MIN(timestamp) as start_date, MAX(timestamp) as end_date FROM ohlcv GROUP BY ticker",
+                                          conn,
+                                          )
+        print("DB records summmary")
+        print(summary_query.to_string(index=False))
+
+    #test query by fetching AAPL data
+    print("AAPL SAMPLE QUERY")
+    sample = "SELECT * FROM ohlcv WHERE ticker = ? ORDER BY timestamp ASC LIMIT 5" 
+    sample_df = pd.read_sql_query(sample, conn, params=("AAPL",))
+    print(sample_df.to_string(index=False))
+
 
 
 
