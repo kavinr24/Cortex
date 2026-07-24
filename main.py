@@ -1,26 +1,70 @@
 import yfinance as yf
 import datetime as dt
-import matplotlib
+import matplotlib as mpl
+import pandas as pd
+
 
 tickers = ['AAPL', 'MSFT','GOOGL','NVDA','SPY','AMZN']
-data = yf.Ticker(tickers[0])
-print(data.info)
-print("------")
-print(data.calendar)
-print(data.analyst_price_targets)
-print("------")
-
-ohlcv = data.history(period="1y") # open high low close volume
-print(ohlcv)
+db = "cortex_market_data.db"
+json_file = "formatted_data.json"
+csv_file = "formatted_data.csv"
 
 cur_time = dt.datetime.now()
 start_time = cur_time - dt.timedelta(days=365*2)
-complete_set = yf.download(tickers, start=start_time, end=cur_time.strftime("%Y-%m-%d"))
+raw = yf.download(tickers, 
+                           start=start_time.strftime("%Y-%m-%d"), 
+                           end=cur_time.strftime("%Y-%m-%d"),
+                           group_by='ticker')
 
-#save data into data.json
-with open('data.json','w') as f:
-    f.write(complete_set.to_json(orient='split',date_format='iso'))
 
-print(complete_set)
+# raw is a multi index dataframe
+# reformat raw into flat table
+
+print("RAW REFORMAT")
+
+df_aapl = raw["AAPL"].dropna().copy()
+print(df_aapl) 
+df_aapl.reset_index(inplace=True)
+
+records = []
 for ticker in tickers:
-    print(yf.Ticker(ticker).history(period="1y"))
+    if ticker in raw.columns:
+        df_ticker = raw[ticker].dropna().copy()
+        df_ticker.reset_index(inplace=True)
+        df_ticker['ticker'] = ticker
+        columns = ['ticker','timestamp','open','high','low','close','volume']
+        mapping = {
+            'Date': 'timestamp',
+            'Datetime': 'timestamp',
+            'Open': 'open',
+            'High': 'high',
+            'Low': 'low',
+            'Close': 'close',
+            'Volume': 'volume'
+        }
+        df_ticker.rename(columns=mapping, inplace=True)
+        #format
+        df_ticker["timestamp"] = df_ticker["timestamp"].dt.strftime("%Y-%m-%d %H:%M:%S")
+        records.append(df_ticker[columns])
+
+flat_table_data = pd.concat(records, ignore_index=True)
+complete_set = flat_table_data.copy()
+
+# export to json
+with open(json_file, 'w') as f:
+    f.write(flat_table_data.to_json(orient='records', date_format='iso'))
+    print("exported to ",json_file)
+
+# export to csv
+with open(csv_file, 'w') as f:
+    f.write(flat_table_data.to_csv(index=False))
+    print("exported records to ",csv_file)
+
+# verify json data
+verify_df = pd.read_json(json_file)
+print("Records per ticker:")
+print(verify_df.groupby('ticker').size())
+
+
+
+# conn = sqlite3.connect('cortex_market_data.db')
