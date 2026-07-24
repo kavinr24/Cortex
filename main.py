@@ -3,8 +3,16 @@ import datetime as dt
 import matplotlib as mpl
 import pandas as pd
 import sqlite3
+import database
 
 
+
+manager = database.DatabaseManager()
+print(manager.load_ticker_data("AAPL"))
+print(manager.get_summary())
+
+
+print("---")
 tickers = ['AAPL', 'MSFT','GOOGL','NVDA','SPY','AMZN']
 db = "cortex_market_data.db"
 json_file = "formatted_data.json"
@@ -66,6 +74,16 @@ verify_df = pd.read_json(json_file)
 print("Records per ticker:")
 print(verify_df.groupby('ticker').size())
 
+manager = database.DatabaseManager(db_path=db)
+manager.save_ohlcv(flat_table_data)
+print("inserted records into db")
+summary_df = manager.get_summary()
+print("DB records summary")
+print(summary_df.to_string(index=False))
+print("AAPL SAMPLE QUERY")
+sample_df = manager.load_ticker_data("AAPL").head(5)
+print(sample_df.to_string(index=False))
+'''
 print("creating sqlite database")
 with sqlite3.connect(db) as conn:
     cursor = conn.cursor()
@@ -103,8 +121,9 @@ with sqlite3.connect(db) as conn:
     sample = "SELECT * FROM ohlcv WHERE ticker = ? ORDER BY timestamp ASC LIMIT 5" 
     sample_df = pd.read_sql_query(sample, conn, params=("AAPL",))
     print(sample_df.to_string(index=False))
+'''
 
-
+    
 
 
 # conn = sqlite3.connect('cortex_market_data.db')
