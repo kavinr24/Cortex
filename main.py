@@ -1,7 +1,9 @@
+import os
 import pandas as pd
 import src.database as database
 from src.fetcher import DataFetcher
 from src.indicators import TechnicalIndicators
+from src.strategy import SMACrossover, RSIStrategy
 
 
 def main():
@@ -51,6 +53,23 @@ def main():
 
     print("RECENT SAMPLE")
     print(sample_df[cols_to_print].tail(10).to_string(index=False))
+
+    #strategy testing
+
+    aapl_df = manager.load_ticker_data("AAPL")
+
+    print("STRATEGY TESTING")
+    print("SMA CROSSOVER 20/50")
+    sma_strat = SMACrossover(aapl_df, fast_period=20, slow_period=50)
+    sma_results = sma_strat.generate_signals()
+    sma_cols = ["timestamp","close","sma_fast","sma_slow","signal","position_change"]
+    print(sma_results[sma_cols].tail(10).to_string(index=False))
+
+    print("RSI STRATEGY 14, 30/70")
+    rsi_strat = RSIStrategy(aapl_df, period=14, oversold=30.0, overbought=70.0)
+    rsi_results = rsi_strat.generate_signals()
+    rsi_cols = ["timestamp","close","rsi","signal","position_change"]
+    print(rsi_results[rsi_cols].tail(10).to_string(index=False))
 
 if __name__ == "__main__":
     main()
