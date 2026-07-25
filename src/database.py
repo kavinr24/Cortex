@@ -26,11 +26,16 @@ class DatabaseManager:
                 
             """
             )
-        conn.commit()
 
     def save_ohlcv(self, df: pd.DataFrame):
         with sqlite3.connect(self.db_path) as conn:
-            df.to_sql('ohlcv', conn, if_exists='append', index=False)
+            # write to temp table, then INSERT OR IGNORE into main to avoid
+            # UNIQUE constraint violations on re-runs
+            df.to_sql('ohlcv_temp', conn, if_exists='replace', index=False)
+            conn.execute(
+                "INSERT OR IGNORE INTO ohlcv SELECT * FROM ohlcv_temp"
+            )
+            conn.execute("DROP TABLE IF EXISTS ohlcv_temp")
 
     def load_ticker_data(self, ticker:str) -> pd.DataFrame:
         # load data for a ticker from the db

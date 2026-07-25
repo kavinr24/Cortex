@@ -1,7 +1,7 @@
 import pandas as pd
-
-import database
-from fetcher import DataFetcher
+import src.database as database
+from src.fetcher import DataFetcher
+from src.indicators import TechnicalIndicators
 
 
 def main():
@@ -36,6 +36,21 @@ def main():
     sample_df = manager.load_ticker_data("AAPL").head(5)
     print(sample_df.to_string(index=False))
 
+    print("indicator testing")
+
+    sample_df = manager.load_ticker_data("AAPL")
+
+    sample_df["sma_20"] = TechnicalIndicators.sma(sample_df["close"], period=20)
+    sample_df["ema_20"] = TechnicalIndicators.ema(sample_df["close"], period=20)
+    sample_df["rsi_14"] = TechnicalIndicators.rsi(sample_df["close"], period=14)
+
+    cols_to_print = ["timestamp","close", "sma_20", "ema_20", "rsi_14"]
+
+    print("EARLY SAMPLE")
+    print(sample_df[cols_to_print].head(20).to_string(index=False))
+
+    print("RECENT SAMPLE")
+    print(sample_df[cols_to_print].tail(10).to_string(index=False))
 
 if __name__ == "__main__":
     main()

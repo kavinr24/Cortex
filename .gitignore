@@ -2,3 +2,4 @@ data.json
 formatted_data.json
 formatted_data.csv
 cortex_market_data.db
+__pycache__/
