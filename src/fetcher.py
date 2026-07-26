@@ -14,25 +14,30 @@ class DataFetcher:
         cur_time = dt.datetime.now()
         start_time = cur_time - dt.timedelta(days=365 * self.years)
 
+        # download raw data from yfinance (usually 2 years of data)
         raw_data = yf.download(
             self.tickers,
             start=start_time.strftime("%Y-%m-%d"),
             end=cur_time.strftime("%Y-%m-%d"),
             group_by='ticker'
         )
+
         records = []
+        
+
         for ticker in self.tickers:
             # yfinance returns a MultiIndex for multiple tickers but a plain Index for one
             if isinstance(raw_data.columns, pd.MultiIndex):
                 if ticker not in raw_data.columns.levels[0]:
                     continue
                 df_ticker = raw_data[ticker].dropna().copy()
+                df_ticker.reset_index(inplace=True)
             else:
                 if raw_data.empty or ticker != self.tickers[0]:
                     continue
                 df_ticker = raw_data.dropna().copy()
-            df_ticker.reset_index(inplace=True)
-            df_ticker["ticker"] = ticker
+                df_ticker.reset_index(inplace=True)
+                df_ticker["ticker"] = ticker
 
             column_mapping = {
                 "Date": "timestamp",
@@ -44,6 +49,7 @@ class DataFetcher:
                 "Volume": "volume"
             }
             df_ticker.rename(columns=column_mapping, inplace=True)
+            df_ticker["ticker"] = ticker
             df_ticker["timestamp"] = df_ticker["timestamp"].astype(str)
 
             cols = [

@@ -4,7 +4,7 @@ import src.database as database
 from src.fetcher import DataFetcher
 from src.indicators import TechnicalIndicators
 from src.strategy import SMACrossover, RSIStrategy
-
+from src.backtester import Backtester
 
 def main():
     tickers = ["AAPL", "MSFT", "GOOGL", "NVDA", "SPY", "AMZN"]
@@ -70,6 +70,30 @@ def main():
     rsi_results = rsi_strat.generate_signals()
     rsi_cols = ["timestamp","close","rsi","signal","position_change"]
     print(rsi_results[rsi_cols].tail(10).to_string(index=False))
+
+    print("BACKTESTING")
+    # run a simple backtest using the SMA crossover signals
+    try:
+        bt = Backtester(
+            initial_capital=100000.0,
+            commission_rate=0.001,
+            slippage_rate=0.0005,
+            position_size_pct=0.95,
+            stop_loss_pct=0.05,
+            take_profit_pct=0.1,
+        )
+
+        # use sma_results if available and it contains 'signal'
+        if 'sma_results' in locals() and 'signal' in sma_results.columns:
+            backtest_df = bt.run(sma_results)
+            print('backtest final equity:', backtest_df['total_equity'].iloc[-1])
+            print('Trade log:')
+            print(bt.get_trade_log().to_string(index=False))
+        else:
+            print('NO SMA signals available for backtesting')
+    except Exception as e:
+        print('backtest failed D: (', e, ')')
+
 
 if __name__ == "__main__":
     main()
