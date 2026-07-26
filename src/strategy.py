@@ -57,4 +57,52 @@ class RSIStrategy(BaseStrategy):
         self.df["position_change"] = self.df["signal"].diff()
 
         return self.df
-    
+
+class BollingerBandsStrategy(BaseStrategy):
+
+    def __init__(self, df: pd.DataFrame, period: int = 20, num_std: float = 2.0):
+        super().__init__(df)
+        self.period = period
+        self.num_std = num_std
+
+    def generate_signals(self) -> pd.DataFrame:
+        # calculate bollinger bands
+        bb = TechnicalIndicators.bollinger_bands(self.df["close"], period=self.period, num_std=self.num_std)
+        self.df["bb_upper"] = bb["bb_upper"]
+        self.df["bb_middle"] = bb["bb_middle"]
+        self.df["bb_lower"] = bb["bb_lower"]
+
+        signals = np.zeros(len(self.df))
+
+        signals[self.df["close"] < self.df["bb_lower"]] = 1
+        signals[self.df["close"] > self.df["bb_upper"]] = -1
+
+        self.df["signal"] = signals
+        self.df["position_change"] = self.df["signal"].diff()
+
+        return self.df
+
+class MACDStrategy(BaseStrategy):
+
+    def __init__(self, df: pd.DataFrame, fast_period: int = 12, slow_period: int = 26, signal_period: int = 9):
+        super().__init__(df)
+        self.fast_period = fast_period
+        self.slow_period = slow_period
+        self.signal_period = signal_period
+
+    def generate_signals(self) -> pd.DataFrame:
+        # calculate macd
+        macd = TechnicalIndicators.macd(self.df["close"], fast_period=self.fast_period, slow_period=self.slow_period, signal_period=self.signal_period)
+        self.df["macd"] = macd["macd"]
+        self.df["macd_signal"] = macd["macd_signal"]
+        self.df["macd_hist"] = macd["macd_hist"]
+
+        signals = np.zeros(len(self.df))
+
+        signals[(self.df["macd"] > self.df["macd_signal"]) & (self.df["macd"].shift(1) <= self.df["macd_signal"].shift(1))] = 1
+        signals[(self.df["macd"] < self.df["macd_signal"]) & (self.df["macd"].shift(1) >= self.df["macd_signal"].shift(1))] = -1
+
+        self.df["signal"] = signals
+        self.df["position_change"] = self.df["signal"].diff()
+
+        return self.df
