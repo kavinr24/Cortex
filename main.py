@@ -5,6 +5,7 @@ from src.fetcher import DataFetcher
 from src.indicators import TechnicalIndicators
 from src.strategy import SMACrossover, RSIStrategy
 from src.backtester import Backtester
+from src.metrics import PerformanceMetrics
 
 def main():
     tickers = ["AAPL", "MSFT", "GOOGL", "NVDA", "SPY", "AMZN"]
@@ -89,10 +90,26 @@ def main():
             print('backtest final equity:', backtest_df['total_equity'].iloc[-1])
             print('Trade log:')
             print(bt.get_trade_log().to_string(index=False))
+
+            print("PERFORMANCE METRICS")
+
+            metrics = PerformanceMetrics(
+                backtest_df = backtest_df,
+                trade_log = bt.get_trade_log(),
+                initial_capital = 100000.0
+                                         )
+            metrics.summary()
+
+
         else:
             print('NO SMA signals available for backtesting')
     except Exception as e:
         print('backtest failed D: (', e, ')')
+
+
+    
+
+    
 
 
 if __name__ == "__main__":
