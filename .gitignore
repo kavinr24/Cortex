@@ -7,3 +7,4 @@ __pycache__/database.cpython-314.pyc
 __pycache__/fetcher.cpython-314.pyc
 got
 src/testing.py
+app/matplotlib_testing.py

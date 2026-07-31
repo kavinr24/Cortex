@@ -13,6 +13,7 @@ class DataFetcher:
         # ticker, timestamp, open, high, low, close, volume
         cur_time = dt.datetime.now()
         start_time = cur_time - dt.timedelta(days=365 * self.years)
+        
 
         # download raw data from yfinance (usually 2 years of data)
         raw_data = yf.download(

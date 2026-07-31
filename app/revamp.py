@@ -1,3 +1,5 @@
+import math
+import random
 import tkinter as tk
 from tkinter import ttk
 
@@ -6,202 +8,223 @@ class CortexDesktopApp:
     def __init__(self, root: tk.Tk):
         self.root = root
         self.root.title("Cortex Backtesting Engine")
-        self.root.geometry("1100x750")
-        self.root.minsize(900, 600)
+        self.root.geometry("1280x800")
+        self.root.minsize(1024, 680)
 
-        # Main Container
-        self.main_container = ttk.Frame(self.root)
-        self.main_container.pack(fill=tk.BOTH, expand=True, padx=10, pady=10)
 
-        # header panel
-        self.header_frame = ttk.LabelFrame(self.main_container)
+        self._setup_styles()
+
+        self.main_container = ttk.Frame(self.root, style="Main.TFrame")
+        self.main_container.pack(fill=tk.BOTH, expand=True, padx=12, pady=12)
+        self.sidebar_visible = True
+        self.current_theme = "dark"
+        self.active_timeframe = tk.StringVar(value="1D")
+        self.execution_mode = tk.StringVar(value="Spot")
+
+        self.header_frame = ttk.LabelFrame(
+            self.main_container,
+            text="",
+            style="Dark.TLabelframe",
+        )
         self.header_frame.pack(fill=tk.X, side=tk.TOP, pady=(0, 10))
 
-        self.title_label = ttk.Label(
-            self.header_frame,
-            text="CORTEX ENGINE",
-            font=("Helvetica", 16, "bold")
+        self._build_header()
+        self._build_body()
+        self._build_statusbar()
+
+        self.root.after(100, self._draw_mock_chart)
+
+    def _setup_styles(self):
+        self.style = ttk.Style()
+        self.style.theme_use("clam")
+        self.bg_dark = "#121212"
+        self.bg_panel = "#1e1e1e"
+        self.bg_card = "#252526"
+        self.fg_main = "#e0e0e0"
+        self.accent_green = "#00e676"
+        self.accent_red = "#ff5252"
+        self.accent_cyan = "#00e5ff"
+
+        self.root.configure(bg=self.bg_dark)
+
+        self.style.configure("Main.TFrame", background=self.bg_dark)
+        self.style.configure("Panel.TFrame", background=self.bg_panel)
+        self.style.configure("CardFrame", background=self.bg_card, relief="flat")
+
+        self.style.configure(
+            "Dark.TLabelframe",
+            background=self.bg_panel,
+            foreground=self.fg_main,
+            bordercolor="#333333",
+            relief="solid"
         )
-        self.title_label.pack(side=tk.LEFT, padx=10, pady=10)
+        self.style.configure(
+            "Dark.TLabelframe.Label",
+            background=self.bg_panel,
+            foreground=self.accent_cyan,
+            font=("Helvetica", 9, "bold")
+        )
 
+        self.style.configure("TLabel", background=self.bg_panel, foreground=self.fg_main, font=("Helvetica", 9))
+        self.style.configure("HeaderTitle.TLabel", background=self.bg_panel, foreground="#ffffff", font=("Helvetica", 14, "bold"))
+        self.style.configure("CardTitle.TLabel", background=self.bg_card, foreground="#a0a0a0", font=("Helvetica", 8))
+        self.style.configure("CardVal.TLabel", background=self.bg_card, foreground=self.accent_green, font=("Helvetica", 11, "bold"))
+        self.style.configure("Accent.TButton", font=("Helvetica", 9, "bold"), background="#0080ff", foreground="#ffffff")
+        self.style.configure("Action.TButton", font=("Helvetica", 8))
 
-        # sidebar and workspace area
-        self.body_frame = ttk.Frame(self.main_container)
+        self.style.configure("TNotebook", background=self.bg_panel, borderwidth=0)
+        self.style.configure("TNotebook.Tab", background=self.bg_card, foreground=self.fg_main, padding=[10, 5], font=("Helvetica", 9))
+        self.style.map("TNotebook.Tab", background=[("selected", self.bg_dark)], foreground=[("selected", self.accent_cyan)])
+
+    def _build_header(self):
+
+        title_box = ttk.Frame(self.header_frame, style="Panel.TFrame")
+        title_box.pack(side=tk.LEFT, padx=12, pady=8)
+
+        ttk.Label(title_box, text="CORTEX ENGINE", style="HeaderTitle.TLabel").pack(anchor=tk.W)
+
+        controls_box = ttk.Frame(self.header_frame, style="Panel.TFrame")
+        controls_box.pack(side=tk.RIGHT, padx=12, pady=8)
+
+        self.sidebar_toggle_btn = ttk.Button(
+            controls_box,
+            text="Toggle Controls",
+            style="Action.TButton",
+            command=self._toggle_sidebar
+        )
+        self.sidebar_toggle_btn.pack(side=tk.RIGHT, padx=5)
+
+        self.chart_redraw_btn = ttk.Button(
+            controls_box,
+            text="Regenerate Graph",
+            style="Action.TButton",
+            command=self._draw_mock_chart
+        )
+        self.chart_redraw_btn.pack(side=tk.RIGHT, padx=5)
+
+        opts_box = ttk.Frame(self.header_frame, style="Panel.TFrame")
+        opts_box.pack(side=tk.RIGHT, padx=20, pady=8)
+
+        ttk.Label(opts_box, text="Timeframe:").pack(side=tk.LEFT, padx=(0, 4))
+        tf_combo = ttk.Combobox(
+            opts_box,
+            textvariable=self.active_timeframe,
+            values=["15M", "1H", "4H", "1D", "1W"],
+            width=5,
+            state="readonly"
+        )
+        tf_combo.pack(side=tk.LEFT, padx=(0, 15))
+
+        ttk.Label(opts_box, text="Execution Mode:").pack(side=tk.LEFT, padx=(0, 4))
+        mode_combo = ttk.Combobox(
+            opts_box,
+            textvariable=self.execution_mode,
+            values=["Spot", "Margin (10x)", "Paper Simulated"],
+            width=14,
+            state="readonly"
+        )
+        mode_combo.pack(side=tk.LEFT)
+
+    def _build_body(self):
+        self.body_frame = ttk.Frame(self.main_container, style="Main.TFrame")
         self.body_frame.pack(fill=tk.BOTH, expand=True)
 
-        # left sidebar
-        self.sidebar_frame = ttk.LabelFrame(self.body_frame, text=" Configuration & Controls ")
+        self._build_sidebar()
+        self._build_workspace()
+
+    def _build_sidebar(self):
+        self.sidebar_frame = ttk.LabelFrame(self.body_frame, text=" Configuration ", style="Dark.TLabelframe")
         self.sidebar_frame.pack(side=tk.LEFT, fill=tk.Y, padx=(0, 10))
 
-        # ticker controls
-        self.asset_label = ttk.Label(self.sidebar_frame, text="Select Symbol:")
-        self.asset_label.pack(anchor=tk.W, padx=10, pady=(10, 2))
+        self.side_canvas = tk.Canvas(self.sidebar_frame, bg=self.bg_panel, highlightthickness=0, width=280)
+        self.side_scrollbar = ttk.Scrollbar(self.sidebar_frame, orient=tk.VERTICAL, command=self.side_canvas.yview)
 
-        self.asset_combo = ttk.Combobox(
-            self.sidebar_frame,
-            values=["AAPL", "MSFT", "GOOGL", "NVDA", "SPY", "AMZN"]
+        self.scroll_sidebar_content = ttk.Frame(self.side_canvas, style="Panel.TFrame")
+        self.scroll_sidebar_content.bind(
+            "<Configure>",
+            lambda e: self.side_canvas.configure(scrollregion=self.side_canvas.bbox("all"))
         )
-        self.asset_combo.set("AAPL")
-        self.asset_combo.pack(fill=tk.X, padx=10, pady=(0, 10))
 
-        # date
-        self.start_date_label = ttk.Label(self.sidebar_frame, text="Start Date (YYYY-MM-DD):")
-        self.start_date_label.pack(anchor=tk.W, padx=10, pady=(5, 2))
-        self.start_date_entry = ttk.Entry(self.sidebar_frame)
+        self.side_canvas.create_window((0, 0), window=self.scroll_sidebar_content, anchor="nw")
+        self.side_canvas.configure(yscrollcommand=self.side_scrollbar.set)
+
+        self.side_canvas.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+        self.side_scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
+
+        c = self.scroll_sidebar_content
+
+        ttk.Label(c, text="DATE & SYMBOL", font=("Helvetica", 8, "bold"), foreground=self.accent_cyan).pack(anchor=tk.W, padx=10, pady=(10, 4))
+
+        ttk.Label(c, text="Target Symbol:").pack(anchor=tk.W, padx=10, pady=(2, 2))
+        self.asset_combo = ttk.Combobox(c, values=["NVDA", "AAPL", "MSFT", "AMD", "BTC-USD", "ETH-USD"], state="readonly")
+        self.asset_combo.set("NVDA")
+        self.asset_combo.pack(fill=tk.X, padx=10, pady=(0, 6))
+
+        ttk.Label(c, text="Start Date:").pack(anchor=tk.W, padx=10, pady=(2, 2))
+        self.start_date_entry = ttk.Entry(c)
         self.start_date_entry.insert(0, "2024-12-11")
-        self.start_date_entry.pack(fill=tk.X, padx=10, pady=(0, 10))
+        self.start_date_entry.pack(fill=tk.X, padx=10, pady=(0, 6))
 
-        self.end_date_label = ttk.Label(self.sidebar_frame, text="End Date (YYYY-MM-DD):")
-        self.end_date_label.pack(anchor=tk.W, padx=10, pady=(5, 2))
-        self.end_date_entry = ttk.Entry(self.sidebar_frame)
+        ttk.Label(c, text="End Date:").pack(anchor=tk.W, padx=10, pady=(2, 2))
+        self.end_date_entry = ttk.Entry(c)
         self.end_date_entry.insert(0, "2026-07-23")
         self.end_date_entry.pack(fill=tk.X, padx=10, pady=(0, 10))
 
-        self.separator_1 = ttk.Separator(self.sidebar_frame, orient="horizontal")
-        self.separator_1.pack(fill=tk.X, padx=10, pady=10)
+        ttk.Separator(c, orient="horizontal").pack(fill=tk.X, padx=10, pady=5)
 
-        # strategy selection
-        self.strategy_label = ttk.Label(self.sidebar_frame, text="Strategy Module:")
-        self.strategy_label.pack(anchor=tk.W, padx=10, pady=(5, 2))
-        self.strategy_combo = ttk.Combobox(
-            self.sidebar_frame,
-            values=["SMA Crossover", "RSI Mean Reversion", "EMA Stochastic Filter"]
-        )
-        self.strategy_combo.set("SMA Crossover")
-        self.strategy_combo.pack(fill=tk.X, padx=10, pady=(0, 10))
+        ttk.Label(c, text="STRATEGY", font=("Helvetica", 8, "bold"), foreground=self.accent_cyan).pack(anchor=tk.W, padx=10, pady=(5, 4))
 
-        # parameter sliders
-        self.p1_label = ttk.Label(self.sidebar_frame, text="Fast Period (5 - 50):")
-        self.p1_label.pack(anchor=tk.W, padx=10, pady=(5, 2))
-        self.p1_scale = ttk.Scale(self.sidebar_frame, from_=5, to=50, orient=tk.HORIZONTAL)
-        self.p1_scale.set(20)
-        self.p1_scale.pack(fill=tk.X, padx=10, pady=(0, 10))
+        self.strategy_combo = ttk.Combobox(c, values=["EMA Trend + Stochastic Filter", "SMA Crossover", "RSI Mean Reversion", "Bollinger Breakout"], state="readonly")
+        self.strategy_combo.set("EMA Trend + Stochastic Filter")
+        self.strategy_combo.pack(fill=tk.X, padx=10, pady=(0, 8))
 
-        self.p2_label = ttk.Label(self.sidebar_frame, text="Slow Period (20 - 200):")
-        self.p2_label.pack(anchor=tk.W, padx=10, pady=(5, 2))
-        self.p2_scale = ttk.Scale(self.sidebar_frame, from_=20, to=200, orient=tk.HORIZONTAL)
-        self.p2_scale.set(50)
-        self.p2_scale.pack(fill=tk.X, padx=10, pady=(0, 10))
+        # MAP
+        self.fast_lbl_frame = ttk.Frame(c, style="Panel.TFrame")
+        self.fast_lbl_frame.pack(fill=tk.X, padx=10, pady=(4, 0))
+        ttk.Label(self.fast_lbl_frame, text="Fast EMA Period:").pack(side=tk.LEFT)
+        self.fast_val_label = ttk.Label(self.fast_lbl_frame, text="20", font=("Helvetica", 9, "bold"), foreground=self.accent_green)
+        self.fast_val_label.pack(side=tk.RIGHT)
 
-        self.separator_2 = ttk.Separator(self.sidebar_frame, orient="horizontal")
-        self.separator_2.pack(fill=tk.X, padx=10, pady=10)
+        self.fast_scale = ttk.Scale(c, from_=5, to=50, orient=tk.HORIZONTAL, command=lambda v: self.fast_val_label.config(text=str(int(float(v)))))
+        self.fast_scale.set(20)
+        self.fast_scale.pack(fill=tk.X, padx=10, pady=(0, 8))
 
-        # capital & commission inputs
-        self.capital_label = ttk.Label(self.sidebar_frame, text="Initial Capital ($):")
-        self.capital_label.pack(anchor=tk.W, padx=10, pady=(5, 2))
-        self.capital_entry = ttk.Entry(self.sidebar_frame)
-        self.capital_entry.insert(0, "100000.0")
-        self.capital_entry.pack(fill=tk.X, padx=10, pady=(0, 10))
+        self.slow_lbl_frame = ttk.Frame(c, style="Panel.TFrame")
+        self.slow_lbl_frame.pack(fill=tk.X, padx=10, pady=(4, 0))
+        ttk.Label(self.slow_lbl_frame, text="Slow EMA Period:").pack(side=tk.LEFT)
+        self.slow_val_label = ttk.Label(self.slow_lbl_frame, text="50", font=("Helvetica", 9, "bold"), foreground=self.accent_green)
+        self.slow_val_label.pack(side=tk.RIGHT)
 
-        self.commission_label = ttk.Label(self.sidebar_frame, text="Commission Rate (%):")
-        self.commission_label.pack(anchor=tk.W, padx=10, pady=(5, 2))
-        self.commission_entry = ttk.Entry(self.sidebar_frame)
-        self.commission_entry.insert(0, "0.1")
-        self.commission_entry.pack(fill=tk.X, padx=10, pady=(0, 10))
+        self.slow_scale = ttk.Scale(c, from_=20, to=200, orient=tk.HORIZONTAL, command=lambda v: self.slow_val_label.config(text=str(int(float(v)))))
+        self.slow_scale.set(50)
+        self.slow_scale.pack(fill=tk.X, padx=10, pady=(0, 8))
 
-        self.slippage_label = ttk.Label(self.sidebar_frame, text="Slippage Rate (%):")
-        self.slippage_label.pack(anchor=tk.W, padx=10, pady=(5, 2))
-        self.slippage_entry = ttk.Entry(self.sidebar_frame)
-        self.slippage_entry.insert(0, "0.05")
-        self.slippage_entry.pack(fill=tk.X, padx=10, pady=(0, 15))
+    def _build_workspace(self):
+        # build right side workspace
+        pass
 
-        # action buttons
-        self.run_button = ttk.Button(self.sidebar_frame, text="Execute Backtest", command=self.execute_backtest)
-        self.run_button.pack(fill=tk.X, padx=10, pady=(5, 10))
+    def _build_statusbar(self):
+        # build bottom status bar
+        pass
 
-        self.reset_button = ttk.Button(self.sidebar_frame, text="Reset Defaults", command=self.reset_defaults)
-        self.reset_button.pack(fill=tk.X, padx=10, pady=(0, 10))
+    def _toggle_sidebar(self):
+        # sidebar visitbklity toggle
+        pass
 
-        # right workspace
-        self.workspace_frame = ttk.Frame(self.body_frame)
-        self.workspace_frame.pack(side=tk.RIGHT, fill=tk.BOTH, expand=True)
+    def _draw_mock_chart(self):
+        # redraw chart with mock data
+        pass
 
-        # metrics
-        self.metrics_frame = ttk.LabelFrame(self.workspace_frame, text=" Performance Indicators ")
-        self.metrics_frame.pack(fill=tk.X, side=tk.TOP, pady=(0, 10))
+    def execute_backtest(self):
+        # execute full pipeline
+        pass
 
-        self.m1_frame = ttk.Frame(self.metrics_frame, relief=tk.GROOVE, borderwidth=1)
-        self.m1_frame.pack(side=tk.LEFT, fill=tk.BOTH, expand=True, padx=5, pady=5)
-        ttk.Label(self.m1_frame, text="Total Return", font=("Helvetica", 9)).pack(pady=(5, 0))
-        ttk.Label(self.m1_frame, text="--.--%", font=("Helvetica", 12, "bold")).pack(pady=(0, 5))
-
-        self.m2_frame = ttk.Frame(self.metrics_frame, relief=tk.GROOVE, borderwidth=1)
-        self.m2_frame.pack(side=tk.LEFT, fill=tk.BOTH, expand=True, padx=5, pady=5)
-        ttk.Label(self.m2_frame, text="Final Equity", font=("Helvetica", 9)).pack(pady=(5, 0))
-        ttk.Label(self.m2_frame, text="$---,---.--", font=("Helvetica", 12, "bold")).pack(pady=(0, 5))
-
-        self.m3_frame = ttk.Frame(self.metrics_frame, relief=tk.GROOVE, borderwidth=1)
-        self.m3_frame.pack(side=tk.LEFT, fill=tk.BOTH, expand=True, padx=5, pady=5)
-        ttk.Label(self.m3_frame, text="Sharpe Ratio", font=("Helvetica", 9)).pack(pady=(5, 0))
-        ttk.Label(self.m3_frame, text="-.--", font=("Helvetica", 12, "bold")).pack(pady=(0, 5))
-
-        self.m4_frame = ttk.Frame(self.metrics_frame, relief=tk.GROOVE, borderwidth=1)
-        self.m4_frame.pack(side=tk.LEFT, fill=tk.BOTH, expand=True, padx=5, pady=5)
-        ttk.Label(self.m4_frame, text="Max Drawdown", font=("Helvetica", 9)).pack(pady=(5, 0))
-        ttk.Label(self.m4_frame, text="--.--%", font=("Helvetica", 12, "bold")).pack(pady=(0, 5))
-
-        self.m5_frame = ttk.Frame(self.metrics_frame, relief=tk.GROOVE, borderwidth=1)
-        self.m5_frame.pack(side=tk.LEFT, fill=tk.BOTH, expand=True, padx=5, pady=5)
-        ttk.Label(self.m5_frame, text="Win Rate", font=("Helvetica", 9)).pack(pady=(5, 0))
-        ttk.Label(self.m5_frame, text="--.--%", font=("Helvetica", 12, "bold")).pack(pady=(0, 5))
-
-        # tabs
-        self.notebook = ttk.Notebook(self.workspace_frame)
-        self.notebook.pack(fill=tk.BOTH, expand=True)
-
-        # chart view (currently placeholder)
-        self.tab_charts = ttk.Frame(self.notebook)
-        self.notebook.add(self.tab_charts, text=" Equity Curve & Drawdown ")
-
-        self.canvas_placeholder = tk.Canvas(self.tab_charts, bg="#ffffff", borderwidth=1, relief=tk.SUNKEN)
-        self.canvas_placeholder.pack(fill=tk.BOTH, expand=True, padx=10, pady=10)
-        self.canvas_placeholder.create_text(
-            300, 200,
-            text="matplotlib render goes into here",
-            font=("Helvetica", 12),
-            fill="#888888"
-        )
-
-        # trade execution log
-        self.tab_trades = ttk.Frame(self.notebook)
-        self.notebook.add(self.tab_trades, text=" Executed Trades Log ")
-
-        self.tree_columns = ("Trade ID", "Entry Date", "Exit Date", "Type", "Entry Price", "Exit Price", "PnL ($)", "Return (%)")
-        self.trade_tree = ttk.Treeview(self.tab_trades, columns=self.tree_columns, show="headings")
-
-        for col in self.tree_columns:
-            self.trade_tree.heading(col, text=col)
-            self.trade_tree.column(col, width=90, anchor=tk.CENTER)
-
-        self.tree_scroll = ttk.Scrollbar(self.tab_trades, orient=tk.VERTICAL, command=self.trade_tree.yview)
-        self.trade_tree.configure(yscrollcommand=self.tree_scroll.set)
-
-        self.trade_tree.pack(side=tk.LEFT, fill=tk.BOTH, expand=True, padx=(10, 0), pady=10)
-        self.tree_scroll.pack(side=tk.RIGHT, fill=tk.Y, padx=(0, 10), pady=10)
-
-    def execute_backtest(self) -> None:
-        print("executing backtest")
-
-    def reset_defaults(self) -> None:
-        self.asset_combo.set("AAPL")
-        self.start_date_entry.delete(0, tk.END)
-        self.start_date_entry.insert(0, "2024-12-11")
-        self.end_date_entry.delete(0, tk.END)
-        self.end_date_entry.insert(0, "2026-07-23")
-        self.strategy_combo.set("SMA Crossover")
-        self.p1_scale.set(20)
-        self.p2_scale.set(50)
-        self.capital_entry.delete(0, tk.END)
-        self.capital_entry.insert(0, "100000.0")
-        self.commission_entry.delete(0, tk.END)
-        self.commission_entry.insert(0, "0.1")
-        self.slippage_entry.delete(0, tk.END)
-        self.slippage_entry.insert(0, "0.05")
-        self.log_text.insert(tk.END, "[RESET] Default values restored.\n")
-        self.log_text.see(tk.END)
+    def reset_defaults(self):
+        # reset all inputs to default values
+        pass
 
 
 if __name__ == "__main__":
     root = tk.Tk()
-    CortexDesktopApp(root)
+    app = CortexDesktopApp(root)
     root.mainloop()
