@@ -212,4 +212,18 @@ class CortexBridge:
         df.index.name = "Timestamp"
         return df
 
+    def _build_fallback_payload(self, params: dict, logs: list) -> BacktestPayload:
+        # returns safe default objects in case theres exceptiond during backtest execution
+        df = self._generate_synthetic_ohlcv("NVDA")
+        df["Portfolio_Valur"] = params.get("capital",100000.0)
+        metrics = {
+            "total_return": "0.00%",
+            "final_balance": f"${params.get('capital', 100000.0):,.2f}",
+            "net_pnl": "$0.00",
+            "max_drawdown": "0.00%",
+            "sharpe_ratio": "0.00",
+            "win_rate": "0.0%",
+            "total_trades": 0
+        }
 
+        return BacktestPayload(metrics=metrics, equity_curve=df, trades=pd.DataFrame(),logs=logs)
