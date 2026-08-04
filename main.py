@@ -6,6 +6,7 @@ from src.indicators import TechnicalIndicators
 from src.strategy import SMACrossover, RSIStrategy
 from src.backtester import Backtester
 from src.metrics import PerformanceMetrics
+from src.builder import CustomStrategy
 
 def main():
     tickers = ["AAPL", "MSFT", "GOOGL", "NVDA", "SPY", "AMZN"]
@@ -71,6 +72,19 @@ def main():
     rsi_results = rsi_strat.generate_signals()
     rsi_cols = ["timestamp","close","rsi","signal","position_change"]
     print(rsi_results[rsi_cols].tail(10).to_string(index=False))
+
+    print("BUILDER TESTING")
+    # create simple moving averages and test CustomStrategy builder
+    builder_df = aapl_df.copy()
+    builder_df["sma_10"] = TechnicalIndicators.sma(builder_df["close"], period=10)
+    builder_df["sma_30"] = TechnicalIndicators.sma(builder_df["close"], period=30)
+
+    custom = CustomStrategy(builder_df)
+    # entry when sma_10 crosses above sma_30, exit when it crosses below
+    custom.add_entry("sma_10", "cross_above", "sma_30")
+    custom.add_exit("sma_10", "cross_below", "sma_30")
+    custom_results = custom.generate_signals()
+    print(custom_results[["timestamp","close","sma_10","sma_30","signal","position_change"]].tail(10).to_string(index=False))
 
     print("BACKTESTING")
     # run a simple backtest using the SMA crossover signals
