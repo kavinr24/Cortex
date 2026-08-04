@@ -105,7 +105,7 @@ def render_sidebar():
         "Slippage (%)", min_value=0.0, max_value=1.0, value=0.05, step=0.01
     )
 
-    run_button = st.sidebar.button("Run Backtest", type="primary", use_container_width=True)
+    run_button = st.sidebar.button("Run Backtest", type="primary", width="stretch")
 
     return (
         ticker,

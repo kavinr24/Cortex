@@ -5,7 +5,7 @@ import streamlit as st
 def render_trade_history(payload, ticker, strategy_key):
     st.subheader("Executed Trades Log")
     if hasattr(payload, "trades") and payload.trades is not None and not payload.trades.empty:
-        st.dataframe(payload.trades, use_container_width=True)
+        st.dataframe(payload.trades, width="stretch")
         csv_data = payload.trades.to_csv(index=False).encode("utf-8")
         st.download_button(
             label="Download Trade Log",
@@ -22,4 +22,5 @@ def render_detailed_metrics(metrics):
     metrics_df = pd.DataFrame(
         list(metrics.items()), columns=["Metric Indicator", "Calculated Value"]
     )
-    st.dataframe(metrics_df, use_container_width=True, hide_index=True)
+    metrics_df["Calculated Value"] = metrics_df["Calculated Value"].astype(str)
+    st.dataframe(metrics_df, width="stretch", hide_index=True)

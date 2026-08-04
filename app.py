@@ -1,7 +1,12 @@
 import json
+import sys
+from pathlib import Path
 
 import streamlit as st
 from bridge import CortexBridge
+
+sys.path.insert(0, str(Path(__file__).resolve().parent / "app"))
+
 from charts import render_performance_chart
 from metrics import render_summary_metrics
 from sidebar import render_sidebar
