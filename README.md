@@ -1,4 +1,7 @@
+<img width="869" height="383" alt="Screenshot 2026-07-24 162404" src="https://github.com/user-attachments/assets/25dd5793-7c98-4c84-9060-edd3c3e5b820" />
+
 # Cortex Backtesting Engine
+
 
 A backtesting engine and live charting dashboard.
 
