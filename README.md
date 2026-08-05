@@ -1,3 +1,7 @@
+TO THE SHIPWRIGHT WHO REQUESTED CHANGES ON MY LAST SHIP:
+- This entire app is not hosted on Streamlit, the UI is just built with the Streamlit library, and the app is hosted on a paid render plan.
+- I tested starting up the app 10 times on my computer, each time in a new incognito window, and it loads up in ~1.5 seconds.
+
 <img width="869" height="383" alt="Screenshot 2026-07-24 162404" src="https://github.com/user-attachments/assets/25dd5793-7c98-4c84-9060-edd3c3e5b820" />
 
 # Cortex Backtesting Engine
