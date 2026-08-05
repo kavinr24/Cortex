@@ -1,6 +1,8 @@
 from dataclasses import dataclass
 from typing import List, Optional, Tuple
+import numpy as np
 import pandas as pd
+from src.builder import validate_market_data
 
 
 @dataclass
@@ -19,6 +21,13 @@ class Trade:
     exit_reason: str = "SIGNAL"  # SIGNAL, STOP_LOSS, TAKE_PROFIT, END_OF_DATA
 
 
+def _clamp(value: float, low: float, high: float, name: str) -> float:
+    value = float(value)
+    if not np.isfinite(value):
+        raise ValueError(f"{name} must be a finite number, got {value!r}")
+    return min(max(value, low), high)
+
+
 class Backtester:
     # simulates a backtest with slippage, commission, stop loss and tp
 
@@ -31,12 +40,16 @@ class Backtester:
         stop_loss_pct: Optional[float] = None,
         take_profit_pct: Optional[float] = None,
     ):
-        self.initial_capital = float(initial_capital)
-        self.commission_rate = float(commission_rate)
-        self.slippage_rate = float(slippage_rate)
-        self.position_size_pct = float(position_size_pct)
-        self.stop_loss_pct = stop_loss_pct
-        self.take_profit_pct = take_profit_pct
+        initial_capital = float(initial_capital)
+        if not np.isfinite(initial_capital) or initial_capital <= 0:
+            raise ValueError(f"initial_capital must be a positive finite number, got {initial_capital!r}")
+
+        self.initial_capital = initial_capital
+        self.commission_rate = _clamp(commission_rate, 0.0, 0.99, "commission_rate")
+        self.slippage_rate = _clamp(slippage_rate, 0.0, 0.99, "slippage_rate")
+        self.position_size_pct = _clamp(position_size_pct, 0.0, 1.0, "position_size_pct")
+        self.stop_loss_pct = _clamp(stop_loss_pct, 0.0, 0.99, "stop_loss_pct") if stop_loss_pct is not None else None
+        self.take_profit_pct = _clamp(take_profit_pct, 0.0, 0.99, "take_profit_pct") if take_profit_pct is not None else None
         self.trades: List[Trade] = []
 
     def calculate_adjusted_entry_price(self, close_price: float) -> float:
@@ -49,7 +62,7 @@ class Backtester:
         return total_value * self.commission_rate
 
     def calculate_position_size(self, cash: float, entry_price: float) -> float:
-        if entry_price <= 0:
+        if not np.isfinite(cash) or not np.isfinite(entry_price) or entry_price <= 0:
             return 0.0
         allocated_cash = cash * self.position_size_pct
         return allocated_cash / entry_price
@@ -93,7 +106,7 @@ class Backtester:
         commission = self.calculate_commission(cost_basis)
         total_cost = cost_basis + commission
 
-        if cash < total_cost:
+        if not np.isfinite(total_cost) or cash < total_cost:
             return cash, 0.0, None
 
         remaining_cash = cash - total_cost
@@ -131,44 +144,51 @@ class Backtester:
         trade.exit_price = exit_price_adj
         trade.commission += commission_exit
 
-
-        if trade.entry_price > 0:
+        cost_basis = trade.entry_price * trade.shares
+        if trade.entry_price > 0 and cost_basis > 0 and np.isfinite(cost_basis):
             trade.pnl = (exit_price_adj - trade.entry_price) * trade.shares - trade.commission
-            trade.pnl_pct = trade.pnl / (trade.entry_price * trade.shares)
-            
+            trade.pnl_pct = trade.pnl / cost_basis
+
         trade.status = "CLOSED"
         trade.exit_reason = reason
 
         return new_cash
 
     def run(self, df: pd.DataFrame, ticker: str = "ASSET") -> pd.DataFrame:
+        validate_market_data(df)
         data = df.copy().reset_index(drop=True)
 
-        # verify required columns exist
-        if "close" not in data.columns:
-            raise ValueError("DataFrame must contain 'close' column")
-
+        # snapshot required columns into contiguous numpy arrays for a fast loop
+        close_arr = pd.to_numeric(data["close"], errors="coerce").to_numpy(dtype=float)
         has_high_low = "high" in data.columns and "low" in data.columns
+        high_arr = pd.to_numeric(data["high"], errors="coerce").to_numpy(dtype=float) if has_high_low else close_arr
+        low_arr = pd.to_numeric(data["low"], errors="coerce").to_numpy(dtype=float) if has_high_low else close_arr
+        timestamp_arr = data["timestamp"].astype(str).to_numpy() if "timestamp" in data.columns else None
 
-        # setup output tracking columns
-        data["cash"] = 0.0
-        data["holdings"] = 0.0
-        data["total_equity"] = 0.0
-        data["shares_held"] = 0.0
+        # ensure signal column exists and has no NaNs
+        if "signal" in data.columns:
+            signal_arr = pd.to_numeric(data["signal"], errors="coerce").fillna(0).astype(int).to_numpy()
+        else:
+            signal_arr = np.zeros(len(data), dtype=int)
+
+        n = len(data)
+        cash_arr = np.empty(n)
+        holdings_arr = np.empty(n)
+        equity_arr = np.empty(n)
+        shares_arr = np.empty(n)
 
         cash = float(self.initial_capital)
         shares = 0.0
         self.trades = []
         active_trade: Optional[Trade] = None
 
-        
-        # main simulation loop
-        for i in range(len(data)):
-            current_date = str(data.loc[i, "timestamp"]) if "timestamp" in data.columns else str(i)
-            close_price = float(data.loc[i, "close"])
-            high_price = float(data.loc[i, "high"]) if has_high_low else close_price
-            low_price = float(data.loc[i, "low"]) if has_high_low else close_price
-            signal = int(data.loc[i, "signal"]) if "signal" in data.columns else 0
+        # main simulation loop (signals generated at t are acted on at t+1)
+        for i in range(n):
+            current_date = str(timestamp_arr[i]) if timestamp_arr is not None else str(i)
+            close_price = float(close_arr[i])
+            high_price = float(high_arr[i]) if has_high_low else close_price
+            low_price = float(low_arr[i]) if has_high_low else close_price
+            exec_signal = int(signal_arr[i - 1]) if i > 0 else 0
 
             # 1. check risk management triggers on open position
             if active_trade is not None and active_trade.status == "OPEN":
@@ -179,15 +199,15 @@ class Backtester:
                     shares = 0.0
                     active_trade = None
 
-            # long entry signal
-            if signal == 1 and shares == 0.0:
+            # long entry signal (from previous bar)
+            if exec_signal == 1 and shares == 0.0:
                 cash, shares, active_trade = self.execute_long_entry(cash, close_price, ticker, current_date)
 
                 if active_trade is not None:
                     self.trades.append(active_trade)
 
-            # exit signal
-            elif signal == -1 and shares > 0.0 and active_trade is not None:
+            # exit signal (from previous bar)
+            elif exec_signal == -1 and shares > 0.0 and active_trade is not None:
                 cash = self.execute_exit(cash, shares, close_price, current_date, active_trade, "SIGNAL")
                 shares = 0.0
                 active_trade = None
@@ -196,24 +216,30 @@ class Backtester:
             holdings_value = shares * close_price
             total_equity = cash + holdings_value
 
-            data.loc[i, "cash"] = cash
-            data.loc[i, "holdings"] = holdings_value
-            data.loc[i, "total_equity"] = total_equity
-            data.loc[i, "shares_held"] = shares
+            cash_arr[i] = cash
+            holdings_arr[i] = holdings_value
+            equity_arr[i] = total_equity
+            shares_arr[i] = shares
 
         # force close any remaining open position at market close on last row
         if active_trade is not None and active_trade.status == "OPEN":
-            last_idx = len(data) - 1
-            close_price = float(data.loc[last_idx, "close"])
-            last_date = str(data.loc[last_idx, "timestamp"]) if "timestamp" in data.columns else str(last_idx)
+            last_idx = n - 1
+            close_price = float(close_arr[last_idx])
+            last_date = str(timestamp_arr[last_idx]) if timestamp_arr is not None else str(last_idx)
 
             cash = self.execute_exit(cash, shares, close_price, last_date, active_trade, "END_OF_DATA")
             shares = 0.0
 
-            data.loc[last_idx, "cash"] = cash
-            data.loc[last_idx, "holdings"] = 0.0
-            data.loc[last_idx, "total_equity"] = cash
-            data.loc[last_idx, "shares_held"] = 0.0
+            cash_arr[last_idx] = cash
+            holdings_arr[last_idx] = 0.0
+            equity_arr[last_idx] = cash
+            shares_arr[last_idx] = 0.0
+
+        # write tracking columns back in one pass
+        data["cash"] = cash_arr
+        data["holdings"] = holdings_arr
+        data["total_equity"] = equity_arr
+        data["shares_held"] = shares_arr
 
         # calculate returns column
         data["returns"] = data["total_equity"].pct_change().fillna(0.0)
@@ -228,7 +254,7 @@ class Backtester:
             direction_str = "LONG" if t.direction == 1 else "SHORT"
 
             entry_price_fmt = round(t.entry_price, 4)
-            exit_price_fmt = round(t.exit_price, 4) if t.exit_price else None
+            exit_price_fmt = round(t.exit_price, 4) if t.exit_price is not None else None
             shares_fmt = round(t.shares, 4)
             commission_fmt = round(t.commission, 6)
             pnl_fmt = round(t.pnl, 6)
