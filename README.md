@@ -1,3 +1,10 @@
+# Cortex Backtesting Engine
+
+## Author
+
+This project was created by [Your Name](https://github.com/yourusername).
+
+---
 TO THE SHIPWRIGHT WHO REQUESTED CHANGES ON MY LAST SHIP:
 - This entire app is not hosted on Streamlit, the UI is just built with the Streamlit library, and the app is hosted on a paid render plan.
 - I tested starting up the app 10 times on my computer, each time in a new incognito window, and it loads up in ~1.5 seconds.
